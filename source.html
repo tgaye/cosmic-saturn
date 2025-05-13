@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Saturn</title>
+    <style>
+        body {
+            margin: ;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+    <div id="info">Move mouse to interact • Click to change nebula</div>
+
+    <script>
+        const sketch = (p) => {
+            let saturn;
+            let rings = [];
+            let moons = [];
+            let nebula = [];
+            let stars = [];
+            let lightAngle = 0;
+            let mouseDist = 0;
+            let hueOffset = 0;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            let rotationSpeed = 0.002;
+            let camX = 0;
+            let camY = 0;
+            let targetCamX = 0;
+            let targetCamY = 0;
+            let zoom = 1;
+            let targetZoom = 1;
+            let nebulaHue = 200;
+            let isDragging = false;
+
+            p.setup = () => {
+                let canvas = p.createCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800), p.WEBGL);
+                canvas.parent('canvas-container');
+                p.colorMode(p.HSB, 360, 100, 100, 1);
+                
+                // Initialize Saturn
+                saturn = {
+                    radius: 120,
+                    rotation: 0,
+                    tilt: p.radians(26.7),
+                    hue: 40,
+                    saturation: 80,
+                    brightness: 90
+                };
+                
+                // Create rings
+                for (let i = 0; i < 3; i++) {
+                    rings.push({
+                        innerRadius: saturn.radius * (1.2 + i * 0.3),
+                        outerRadius: saturn.radius * (1.5 + i * 0.3),
+                        hue: (200 + i * 30) % 360,
+                        saturation: 70,
+                        brightness: 80,
+                        rotation: p.random(p.TWO_PI),
+                        rotationSpeed: p.random(0.001, 0.003),
+                        particles: []
+                    });
+                    
+                    // Create ring particles
+                    for (let j = 0; j < 300; j++) {
+                        const angle = p.random(p.TWO_PI);
+                        const dist = p.random(rings[i].innerRadius, rings[i].outerRadius);
+                        rings[i].particles.push({
+                            x: p.cos(angle) * dist,
+                            y: p.sin(angle) * dist * 0.1,
+                            z: p.sin(angle) * dist,
+                            size: p.random(0.5, 2),
+                            angle: angle,
+                            speed: p.random(0.01, 0.03)
+                        });
+                    }
+                }
+                
+                // Create moons
+                const moonNames = ['Titan', 'Rhea', 'Iapetus', 'Dione', 'Tethys'];
+                for (let i = 0; i < 5; i++) {
+                    moons.push({
+                        name: moonNames[i],
+                        radius: p.random(10, 20),
+                        distance: saturn.radius * (2 + i * 0.8),
+                        angle: p.random(p.TWO_PI),
+                        speed: p.random(0.01, 0.03),
+                        hue: (120 + i * 50) % 360,
+                        saturation: 70,
+                        brightness: 90,
+                        orbitTilt: p.radians(p.random(-15, 15))
+                    });
+                }
+                
+                // Create nebula background
+                for (let i = 0; i < 50; i++) {
+                    nebula.push({
+                        x: p.random(-p.width, p.width),
+                        y: p.random(-p.height, p.height),
+                        z: p.random(-2000, -500),
+                        size: p.random(50, 200),
+                        hue: (nebulaHue + p.random(-30, 30)) % 360,
+                        alpha: p.random(0.02, 0.1)
+                    });
+                }
+                
+                // Create stars
+                for (let i = 0; i < 1000; i++) {
+                    stars.push({
+                        x: p.random(-2000, 2000),
+                        y: p.random(-2000, 2000),
+                        z: p.random(-2000, 2000),
+                        size: p.random(0.5, 2),
+                        brightness: p.random(0.5, 1)
+                    });
+                }
+            };
+
+            p.draw = () => {
+                // Update camera position based on mouse
+                if (!isDragging) {
+                    targetCamX = p.map(p.mouseX, 0, p.width, -p.width/4, p.width/4);
+                    targetCamY = p.map(p.mouseY, 0, p.height, -p.height/4, p.height/4);
+                }
+                camX = p.lerp(camX, targetCamX, 0.05);
+                camY = p.lerp(camY, targetCamY, 0.05);
+                
+                // Update zoom based on mouse distance from center
+                mouseDist = p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2);
+                targetZoom = p.map(mouseDist, 0, p.width/2, 0.8, 1.2);
+                zoom = p.lerp(zoom, targetZoom, 0.05);
+                
+                // Set background
+                p.background(0);
+                p.push();
+                
+                // Camera setup
+                p.translate(camX, camY);
+                p.scale(zoom);
+                
+                // Lighting
+                lightAngle += 0.005;
+                p.pointLight(255, 255, 255, p.cos(lightAngle) * 500, p.sin(lightAngle) * 500, 500);
+                p.ambientLight(60);
+                
+                // Draw stars
+                p.push();
+                p.rotateY(p.frameCount * 0.001);
+                for (let star of stars) {
+                    p.push();
+                    p.translate(star.x, star.y, star.z);
+                    p.noStroke();
+                    p.fill(255, star.brightness * 100);
+                    p.sphere(star.size);
+                    p.pop();
+                }
+                p.pop();
+                
+                // Draw nebula
+                p.push();
+                for (let cloud of nebula) {
+                    p.push();
+                    p.translate(cloud.x, cloud.y, cloud.z);
+                    p.noStroke();
+                    p.fill(cloud.hue, 50, 50, cloud.alpha);
+                    p.sphere(cloud.size);
+                    p.pop();
+                }
+                p.pop();
+                
+                // Rotate entire scene
+                p.rotateY(p.frameCount * 0.01);
+                
+                // Draw Saturn
+                p.push();
+                p.rotateX(saturn.tilt);
+                p.rotateY(saturn.rotation);
+                saturn.rotation += rotationSpeed;
+                
+                // Saturn body
+                p.noStroke();
+                p.fill(saturn.hue, saturn.saturation, saturn.brightness);
+                p.sphere(saturn.radius);
+                
+                // Saturn rings
+                for (let ring of rings) {
+                    p.push();
+                    p.rotateX(p.PI/2);
+                    p.rotateY(ring.rotation);
+                    ring.rotation += ring.rotationSpeed;
+                    
+                    for (let particle of ring.particles) {
+                        p.push();
+                        particle.angle += particle.speed;
+                        const x = p.cos(particle.angle) * particle.z;
+                        const z = p.sin(particle.angle) * particle.z;
+                        p.translate(x, particle.y, z);
+                        
+                        // Interactive color change based on mouse
+                        const distToMouse = p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2);
+                        const hueShift = p.map(distToMouse, 0, p.width/2, 0, 50);
+                        
+                        p.fill((ring.hue + hueShift + hueOffset) % 360, ring.saturation, ring.brightness);
+                        p.sphere(particle.size);
+                        p.pop();
+                    }
+                    p.pop();
+                }
+                p.pop();
+                
+                // Draw moons
+                for (let moon of moons) {
+                    p.push();
+                    p.rotateX(moon.orbitTilt);
+                    p.rotateY(moon.angle);
+                    moon.angle += moon.speed;
+                    
+                    const x = p.cos(moon.angle) * moon.distance;
+                    const z = p.sin(moon.angle) * moon.distance;
+                    p.translate(x, 0, z);
+                    
+                    // Calculate screen position for glow effect
+                    // First, get the current model-view-projection matrix state
+                    p.push();
+                    // Create a copy of the current transformation
+                    let moonWorldPos = p.createVector(x, 0, z);
+                    
+                    // Manually project the point to screen space
+                    let screenX = p.width/2;  // Start at center
+                    let screenY = p.height/2; // Start at center
+                    
+                    // Apply a simple perspective calculation
+                    let cameraZ = (p.height/2) / p.tan(p.PI/6); // Default p5.js camera position
+                    let perspective = cameraZ / (cameraZ - moonWorldPos.z);
+                    
+                    // Apply perspective calculation
+                    screenX += moonWorldPos.x * perspective;
+                    screenY += moonWorldPos.y * perspective;
+                    
+                    p.pop();
+                    
+                    // Calculate distance to mouse
+                    const distToMouse = p.dist(p.mouseX, p.mouseY, screenX, screenY);
+                    const glow = p.map(distToMouse, 0, 100, 1.5, 1, true);
+                    
+                    p.noStroke();
+                    p.fill(moon.hue, moon.saturation, moon.brightness);
+                    p.sphere(moon.radius * glow);
+                    p.pop();
+                }
+                
+                // Update hue offset based on mouse movement
+                const mouseVel = p.dist(p.mouseX, p.mouseY, lastMouseX, lastMouseY);
+                hueOffset += mouseVel * 0.1;
+                lastMouseX = p.mouseX;
+                lastMouseY = p.mouseY;
+                
+                p.pop();
+            };
+
+            p.mousePressed = () => {
+                // Change nebula colors on click
+                nebulaHue = (nebulaHue + 60) % 360;
+                for (let cloud of nebula) {
+                    cloud.hue = (nebulaHue + p.random(-30, 30)) % 360;
+                }
+                
+                // Check if mouse is dragging
+                isDragging = true;
+            };
+
+            p.mouseReleased = () => {
+                isDragging = false;
+            };
+
+            p.mouseDragged = () => {
+                // Rotate view when dragging
+                targetCamX += (p.mouseX - p.pmouseX) * 0.5;
+                targetCamY += (p.mouseY - p.pmouseY) * 0.5;
+            };
+
+            p.windowResized = () => {
+                p.resizeCanvas(p.min(p.windowWidth, 1200), p.min(p.windowHeight, 800));
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
